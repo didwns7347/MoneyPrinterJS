@@ -82,7 +82,8 @@ final class HTTPClient {
         return (payload, response.data)
     }
 
-    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+    func send(_ request: HTTPRequest, retryPolicy: RetryPolicy? = nil) async throws -> HTTPResponse {
+        let policy = retryPolicy ?? self.retryPolicy
         let urlRequest = try makeURLRequest(request)
         var attempt = 0
         while true {
@@ -105,10 +106,10 @@ final class HTTPClient {
                 return HTTPResponse(data: data, response: http)
             }
 
-            if retryPolicy.retryableStatusCodes.contains(http.statusCode),
-               attempt < retryPolicy.maxRetries
+            if policy.retryableStatusCodes.contains(http.statusCode),
+               attempt < policy.maxRetries
             {
-                let delay = retryDelay(attempt: attempt, response: http)
+                let delay = retryDelay(attempt: attempt, response: http, policy: policy)
                 attempt += 1
                 try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 continue
@@ -122,8 +123,12 @@ final class HTTPClient {
         }
     }
 
-    func send<Response: Decodable>(_ request: HTTPRequest, as type: Response.Type) async throws -> Response {
-        let response = try await send(request)
+    func send<Response: Decodable>(
+        _ request: HTTPRequest,
+        as type: Response.Type,
+        retryPolicy: RetryPolicy? = nil
+    ) async throws -> Response {
+        let response = try await send(request, retryPolicy: retryPolicy)
         return try decode(type, from: response.data)
     }
 
@@ -159,7 +164,7 @@ final class HTTPClient {
         }
     }
 
-    private func retryDelay(attempt: Int, response: HTTPURLResponse) -> TimeInterval {
+    private func retryDelay(attempt: Int, response: HTTPURLResponse, policy: RetryPolicy) -> TimeInterval {
         if let header = response.value(forHTTPHeaderField: "Retry-After") {
             if let seconds = TimeInterval(header) {
                 return min(max(seconds, 0), 60)
@@ -171,12 +176,15 @@ final class HTTPClient {
                 return min(max(date.timeIntervalSinceNow, 0), 60)
             }
         }
-        return min(retryPolicy.baseDelay * pow(2, Double(attempt)), retryPolicy.maxDelay)
+        return min(policy.baseDelay * pow(2, Double(attempt)), policy.maxDelay)
     }
 
     private static func errorMessage(from data: Data) -> String {
         if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             if let message = json["message"] as? String, !message.isEmpty {
+                return message
+            }
+            if let message = json["msg1"] as? String, !message.isEmpty {
                 return message
             }
             if let error = json["error"] as? [String: Any],

@@ -11,9 +11,20 @@
 		9BEEF7E4307C6CE40095179E /* Config.example.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 9BEEF7E2307C6CE40095179E /* Config.example.xcconfig */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		9B885A103087414E008FF163 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 000000000000000000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 000000000000000100000000;
+			remoteInfo = MoneyPrinter;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		000000000000000000000030 /* MoneyPrinter.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = MoneyPrinter.xcconfig; sourceTree = "<group>"; };
 		000000000000000000000120 /* MoneyPrinter.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MoneyPrinter.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		9B8859FC3087414E008FF163 /* MoneyPrinterTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MoneyPrinterTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9BEEF7E1307C6CE40095179E /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 		9BEEF7E2307C6CE40095179E /* Config.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.example.xcconfig; sourceTree = "<group>"; };
 		9BEEF7E5307C6CE4009517A0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -25,10 +36,20 @@
 			path = MoneyPrinter;
 			sourceTree = "<group>";
 		};
+		9B8859FD3087414E008FF163 /* MoneyPrinterTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MoneyPrinterTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		000000000000000130000000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		9B8859F93087414E008FF163 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
 			);
@@ -44,6 +65,7 @@
 				9BEEF7E5307C6CE4009517A0 /* Info.plist */,
 				000000000000000000000030 /* MoneyPrinter.xcconfig */,
 				000000000000000000000010 /* MoneyPrinter */,
+				9B8859FD3087414E008FF163 /* MoneyPrinterTests */,
 				000000000000000000000020 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -52,6 +74,7 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000120 /* MoneyPrinter.app */,
+				9B8859FC3087414E008FF163 /* MoneyPrinterTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -77,6 +100,27 @@
 			productReference = 000000000000000000000120 /* MoneyPrinter.app */;
 			productType = "com.apple.product-type.application";
 		};
+		9B8859FB3087414E008FF163 /* MoneyPrinterTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9B885A003087414E008FF163 /* Build configuration list for PBXNativeTarget "MoneyPrinterTests" */;
+			buildPhases = (
+				9B8859F83087414E008FF163 /* Sources */,
+				9B8859F93087414E008FF163 /* Frameworks */,
+				9B8859FA3087414E008FF163 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				9B885A113087414E008FF163 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				9B8859FD3087414E008FF163 /* MoneyPrinterTests */,
+			);
+			name = MoneyPrinterTests;
+			productName = MoneyPrinterTests;
+			productReference = 9B8859FC3087414E008FF163 /* MoneyPrinterTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -84,11 +128,14 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2630;
+				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					000000000000000100000000 = {
 						CreatedOnToolsVersion = 26.3;
+					};
+					9B8859FB3087414E008FF163 = {
+						CreatedOnToolsVersion = 27.0;
 					};
 				};
 			};
@@ -107,6 +154,7 @@
 			projectRoot = "";
 			targets = (
 				000000000000000100000000 /* MoneyPrinter */,
+				9B8859FB3087414E008FF163 /* MoneyPrinterTests */,
 			);
 		};
 /* End PBXProject section */
@@ -119,6 +167,11 @@
 				9BEEF7E4307C6CE40095179E /* Config.example.xcconfig in Resources */,
 			);
 		};
+		9B8859FA3087414E008FF163 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -127,7 +180,20 @@
 			files = (
 			);
 		};
+		9B8859F83087414E008FF163 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		9B885A113087414E008FF163 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 000000000000000100000000 /* MoneyPrinter */;
+			targetProxy = 9B885A103087414E008FF163 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		000000000000000011000000 /* Debug configuration for PBXProject "MoneyPrinter" */ = {
@@ -352,6 +418,58 @@
 			};
 			name = Release;
 		};
+		9B885A013087414E008FF163 /* Debug configuration for PBXNativeTarget "MoneyPrinterTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = LUXDLYRG7S;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.6.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.firejs.MoneyPrinterTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MoneyPrinter.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MoneyPrinter";
+				XROS_DEPLOYMENT_TARGET = 27.0;
+			};
+			name = Debug;
+		};
+		9B885A023087414E008FF163 /* Release configuration for PBXNativeTarget "MoneyPrinterTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = LUXDLYRG7S;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MACOSX_DEPLOYMENT_TARGET = 26.6.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.firejs.MoneyPrinterTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MoneyPrinter.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MoneyPrinter";
+				XROS_DEPLOYMENT_TARGET = 27.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -368,6 +486,14 @@
 			buildConfigurations = (
 				000000000000000111000000 /* Debug configuration for PBXNativeTarget "MoneyPrinter" */,
 				000000000000000112000000 /* Release configuration for PBXNativeTarget "MoneyPrinter" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		9B885A003087414E008FF163 /* Build configuration list for PBXNativeTarget "MoneyPrinterTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9B885A013087414E008FF163 /* Debug configuration for PBXNativeTarget "MoneyPrinterTests" */,
+				9B885A023087414E008FF163 /* Release configuration for PBXNativeTarget "MoneyPrinterTests" */,
 			);
 			defaultConfigurationName = Release;
 		};

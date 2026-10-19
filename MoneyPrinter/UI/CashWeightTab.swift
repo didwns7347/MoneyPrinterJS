@@ -8,6 +8,10 @@ private final class CashWeightScreen {
     private(set) var history: [CashWeightRecord] = []
     private(set) var isLoading = false
     private(set) var errorMessage: String?
+    private(set) var orderPlan: RebalanceOrder?
+    private(set) var orderNote: String?
+    private(set) var isOrdering = false
+    var confirmingOrder = false
     private var reloadGeneration = 0
 
     func reload() async {
@@ -16,6 +20,8 @@ private final class CashWeightScreen {
         let market = market
         isLoading = true
         errorMessage = nil
+        orderPlan = nil
+        orderNote = nil
         defer {
             if generation == reloadGeneration {
                 isLoading = false
@@ -43,6 +49,64 @@ private final class CashWeightScreen {
         let records = store.history(ticker: market.ticker)
         today = records.first
         history = Array(records.dropFirst())
+    }
+
+    func previewOrder(cashFraction: Double, confidence: Double) async {
+        guard market == .kodexSP500 else { return }
+        isOrdering = true
+        orderNote = nil
+        defer { isOrdering = false }
+        do {
+            let api = KoreaInvestmentAPIService.shared
+            let ticker = market.ticker
+            async let balance = api.fetchDomesticStockBalance()
+            async let price = api.domesticLastPrice(stockCode: ticker)
+            let response = try await balance
+            let holding = response.stockList?.first { $0.code == ticker }
+            orderPlan = Rebalance.order(
+                cashFraction: cashFraction,
+                confidence: confidence,
+                cash: Rebalance.integer(response.accountSummary?.first?.orderableCash),
+                held: Rebalance.integer(holding?.quantity),
+                price: try await price
+            )
+        } catch {
+            orderNote = error.localizedDescription
+        }
+    }
+
+    func sendOrder() async {
+        guard market == .kodexSP500, let plan = orderPlan else { return }
+        guard Rebalance.marketIsOpen() else {
+            orderNote = "정규장이 아니라 주문을 보내지 않았습니다."
+            return
+        }
+        let side: DomesticOrderSide
+        let quantity: Int
+        switch plan.action {
+        case .buy(let count):
+            side = .buy
+            quantity = count
+        case .sell(let count):
+            side = .sell
+            quantity = count
+        case .hold:
+            return
+        }
+        isOrdering = true
+        orderNote = nil
+        defer { isOrdering = false }
+        do {
+            let receipt = try await KoreaInvestmentAPIService.shared.orderDomesticCash(
+                side: side,
+                ticker: market.ticker,
+                quantity: quantity
+            )
+            orderNote = "주문번호 \(receipt.orderNumber)"
+            orderPlan = nil
+        } catch {
+            orderNote = error.localizedDescription
+        }
     }
 }
 
@@ -91,7 +155,11 @@ struct CashWeightTab: View {
     }
 
     private func recordList(_ today: CashWeightRecord) -> some View {
-        List {
+        @Bindable var screen = screen
+        return List {
+            if screen.market == .kodexSP500 {
+                orderSection(cashFraction: today.fraction, confidence: today.confidence)
+            }
             Section {
                 LabeledContent("지표", value: screen.market.title)
                 LabeledContent("종가 기준일", value: today.day)
@@ -134,6 +202,93 @@ struct CashWeightTab: View {
             }
         }
         .refreshable { await screen.reload() }
+        .alert(orderAlertTitle, isPresented: $screen.confirmingOrder) {
+            Button("주문", role: .destructive) {
+                Task { await screen.sendOrder() }
+            }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text(screen.orderPlan?.summary ?? "")
+        }
+    }
+
+    private var orderAlertTitle: String {
+        APIConfigManager.isDemo ? "모의투자 주문을 보낼까요?" : "실전 주문을 보낼까요?"
+    }
+
+    private func orderSection(cashFraction: Double, confidence: Double) -> some View {
+        Section {
+            if let plan = screen.orderPlan {
+                HStack {
+                    Text(plan.summary)
+                        .font(.headline)
+                        .foregroundStyle(orderColor(plan.action))
+                    Spacer()
+                    Button("다시 비교") {
+                        Task { await screen.previewOrder(cashFraction: cashFraction, confidence: confidence) }
+                    }
+                    .font(.subheadline)
+                    .disabled(screen.isOrdering)
+                }
+                LabeledContent("보유 → 목표", value: "\(plan.held)주 → \(plan.targetQuantity)주")
+                    .monospacedDigit()
+                LabeledContent("현재가", value: DisplayNumber.won(String(plan.price)))
+                    .monospacedDigit()
+                LabeledContent("예수금", value: DisplayNumber.won(String(plan.cash)))
+                    .monospacedDigit()
+                if plan.sendsOrder, Rebalance.marketIsOpen() {
+                    Button {
+                        screen.confirmingOrder = true
+                    } label: {
+                        Text("\(plan.summary) 주문 보내기")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(orderColor(plan.action))
+                    .controlSize(.large)
+                    .disabled(screen.isOrdering)
+                } else if plan.sendsOrder {
+                    Label("정규장(평일 09:00–15:20)에만 주문할 수 있습니다.", systemImage: "clock")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Button {
+                    Task { await screen.previewOrder(cashFraction: cashFraction, confidence: confidence) }
+                } label: {
+                    Label("계좌 잔고와 비교해 주문 수량 계산", systemImage: "arrow.left.arrow.right.circle.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(screen.isOrdering)
+            }
+            if screen.isOrdering {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+            }
+            if let orderNote = screen.orderNote {
+                Text(orderNote)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(orderNote.hasPrefix("주문번호") ? Color.primary : Color.red)
+            }
+        } header: {
+            Label(APIConfigManager.isDemo ? "모의 주문" : "실전 주문", systemImage: "wonsign.circle.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(APIConfigManager.isDemo ? Color.secondary : Color.red)
+        } footer: {
+            Text("KODEX 미국S&P500(H)만, 평일 09:00–15:20에 시장가로 맞춥니다. 차이가 계좌의 10% 미만이면 주문하지 않고, 넘으면 목표 수량까지 한 번에 맞춥니다. confidence가 0.5 미만인 날은 주문하지 않습니다.")
+        }
+    }
+
+    private func orderColor(_ action: RebalanceOrder.Action) -> Color {
+        switch action {
+        case .buy: .red
+        case .sell: .blue
+        case .hold: .primary
+        }
     }
 
     @ViewBuilder

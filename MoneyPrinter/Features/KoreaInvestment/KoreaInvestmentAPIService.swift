@@ -34,10 +34,13 @@ class KoreaInvestmentAPIService {
         return try await tokenManager.getValidToken()
     }
 
-    private func request<T: Decodable>(_ endpoint: KoreaInvestmentEndpoint) async throws -> T {
+    private func request<T: Decodable>(
+        _ endpoint: KoreaInvestmentEndpoint,
+        retry: RetryPolicy? = nil
+    ) async throws -> T {
         try prepare()
         guard let http else { throw APIConfigError.missingKeys(["URL_BASE"]) }
-        return try await http.send(try endpoint.makeRequest(), as: T.self)
+        return try await http.send(endpoint.makeRequest(), as: T.self, retryPolicy: retry)
     }
 
     func resetToken() async throws {
@@ -84,7 +87,8 @@ class KoreaInvestmentAPIService {
             let countBefore = collected.count
             for candle in candles {
                 guard let close = Double(candle.close), close > 0,
-                      let high = Double(candle.high), high > 0 else {
+                      let high = Double(candle.high), high > 0
+                else {
                     throw MarketSnapshotError.invalidPrice(date: candle.date)
                 }
                 collected[candle.date] = IndexDailyBar(date: candle.date, close: close, high: max(high, close))
@@ -122,7 +126,8 @@ class KoreaInvestmentAPIService {
             let countBefore = collected.count
             for candle in candles {
                 guard let close = Self.number(candle.closingPrice), close > 0,
-                      let high = Self.number(candle.highPrice), high > 0 else {
+                      let high = Self.number(candle.highPrice), high > 0
+                else {
                     throw MarketSnapshotError.invalidPrice(date: candle.businessDate)
                 }
                 collected[candle.businessDate] = IndexDailyBar(
@@ -245,8 +250,7 @@ class KoreaInvestmentAPIService {
     func fetchDomesticStockPerformance(code: String) async throws -> DomesticStockPerformanceResponse {
         let token = try await validToken()
         let endpoint = KoreaInvestmentEndpoint.fetchDomesticStockPerformance(token: token, stockCode: code)
-        let response: DomesticStockPerformanceResponse = try await request(endpoint)
-        return response
+        return try await request(endpoint)
     }
 
     /// 국내주식 기본 조회
@@ -298,11 +302,62 @@ class KoreaInvestmentAPIService {
         return response.balance
     }
 
-    // 3달치
+    /// 국내 현금 시장가 주문. 같은 본문으로 hashkey를 받은 뒤 한 번만 보냅니다.
+    func orderDomesticCash(side: DomesticOrderSide, ticker: String, quantity: Int) async throws -> DomesticCashOrderReceipt {
+        guard quantity > 0 else { throw OrderError.invalidQuantity }
+        let token = try await validToken()
+        let config = try APIConfigManager.load()
+        var fields = [
+            "ACNT_PRDT_CD": config.accountCode,
+            "CANO": config.cano,
+            "EXCG_ID_DVSN_CD": "KRX",
+            "ORD_DVSN": "01",
+            "ORD_QTY": String(quantity),
+            "ORD_UNPR": "0",
+            "PDNO": ticker,
+        ]
+        if side == .sell {
+            fields["SLL_TYPE"] = "01"
+        }
+        let body = try JSONSerialization.data(withJSONObject: fields, options: [.sortedKeys])
+        let hash: HashKeyResponse = try await request(.hashKey(body: body), retry: RetryPolicy.none)
+        let response: DomesticCashOrderResponse = try await request(
+            .orderCash(token: token, side: side, body: body, hash: hash.hash),
+            retry: RetryPolicy.none
+        )
+        guard response.isSuccess, let output = response.output else {
+            throw OrderError.rejected(response.message)
+        }
+        return DomesticCashOrderReceipt(orderNumber: output.orderNumber, orderTime: output.orderTime)
+    }
+
+    func domesticLastPrice(stockCode: String) async throws -> Int {
+        let token = try await validToken()
+        let response: DomesticLastPriceResponse = try await request(
+            .fetchDomesticStockInfo(token: token, stockCode: stockCode)
+        )
+        let price = Rebalance.integer(response.output.price)
+        guard price > 0 else { throw OrderError.rejected("현재가가 없습니다.") }
+        return price
+    }
+
+    /// 3달치
     private func getStartFinDates() -> (String, String) {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd"
         let start = Calendar.current.date(byAdding: .month, value: -3, to: Date())
         return (start.map { formatter.string(from: $0) } ?? "", formatter.string(from: Date()))
+    }
+}
+
+private struct DomesticLastPriceResponse: Decodable {
+    let output: Output
+
+    struct Output: Decodable {
+        let price: String
+
+        enum CodingKeys: String, CodingKey {
+            case price = "stck_prpr"
+        }
     }
 }

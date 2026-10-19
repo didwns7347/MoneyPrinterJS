@@ -38,10 +38,11 @@ enum KoreaInvestmentEndpoint {
         token: String,
         stockCode: String
     )
+    case hashKey(body: Data)
+    case orderCash(token: String, side: DomesticOrderSide, body: Data, hash: String)
 
     func makeRequest() throws -> HTTPRequest {
-        _ = Self.didCheck
-        return HTTPRequest(
+        HTTPRequest(
             method: method,
             path: path,
             query: query,
@@ -52,7 +53,7 @@ enum KoreaInvestmentEndpoint {
 
     var method: HTTPMethod {
         switch self {
-        case .issueToken:
+        case .issueToken, .hashKey, .orderCash:
             return .post
         default:
             return .get
@@ -79,10 +80,14 @@ enum KoreaInvestmentEndpoint {
             return "/uapi/domestic-stock/v1/finance/income-statement"
         case .fetchDomesticStockInfo:
             return "/uapi/domestic-stock/v1/quotations/inquire-price"
+        case .hashKey:
+            return "/uapi/hashkey"
+        case .orderCash:
+            return "/uapi/domestic-stock/v1/trading/order-cash"
         }
     }
 
-    private var transactionID: String? {
+    var transactionID: String? {
         switch self {
         case .issueToken:
             return nil
@@ -102,10 +107,14 @@ enum KoreaInvestmentEndpoint {
             return "TTTS3007R"
         case .fetchDomesticStockPerformance:
             return "FHKST66430200"
+        case .hashKey:
+            return nil
+        case .orderCash(_, let side, _, _):
+            return side.transactionID
         }
     }
 
-    private var query: [URLQueryItem] {
+    var query: [URLQueryItem] {
         switch self {
         case .issueToken:
             return []
@@ -170,6 +179,8 @@ enum KoreaInvestmentEndpoint {
                 URLQueryItem(name: "fid_cond_mrkt_div_code", value: "J"),
                 URLQueryItem(name: "fid_input_iscd", value: code),
             ]
+        case .hashKey, .orderCash:
+            return []
         }
     }
 
@@ -177,6 +188,18 @@ enum KoreaInvestmentEndpoint {
         switch self {
         case .issueToken:
             return ["content-type": "application/json"]
+        case .hashKey:
+            let config = try APIConfigManager.load()
+            return [
+                "content-type": "application/json",
+                "appkey": config.appKey,
+                "appsecret": config.appSecret,
+            ]
+        case .orderCash(let token, _, _, let hash):
+            var headers = try authHeaders(token: token, trID: transactionID ?? "")
+            headers["custtype"] = "P"
+            headers["hashkey"] = hash
+            return headers
         case .fetchDomesticStockPerformance(let token, _),
              .fetchOverseasIndexDailyPrice(let token, _, _, _):
             var headers = try authHeaders(token: token, trID: transactionID ?? "")
@@ -198,8 +221,11 @@ enum KoreaInvestmentEndpoint {
              .fetchOverseasStockBalance(let token, _, _),
              .fetchOverseasAccountBalance(let token, _),
              .fetchDomesticStockPerformance(let token, _),
-             .fetchDomesticStockInfo(let token, _):
+             .fetchDomesticStockInfo(let token, _),
+             .orderCash(let token, _, _, _):
             return token
+        case .hashKey:
+            return ""
         }
     }
 
@@ -225,6 +251,8 @@ enum KoreaInvestmentEndpoint {
             } catch {
                 throw NetworkError.encoding(error.localizedDescription)
             }
+        case .hashKey(let body), .orderCash(_, _, let body, _):
+            return body
         default:
             return nil
         }
@@ -253,36 +281,18 @@ enum KoreaInvestmentEndpoint {
         ] + more
     }
 
-    private static let didCheck: Void = {
-        let issued = KoreaInvestmentEndpoint.issueToken
-        assert(issued.method == .post && issued.path == "/oauth2/tokenP")
-        let daily = KoreaInvestmentEndpoint.fetchDailyPrice(
-            token: "t",
-            stockCode: "005930",
-            periodDivCode: "D",
-            startDate: "20260101",
-            finDate: "20260401"
-        )
-        assert(daily.method == .get)
-        assert(daily.path == "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice")
-        assert(daily.transactionID == "FHKST03010100")
-        assert(daily.query.contains(URLQueryItem(name: "fid_input_iscd", value: "005930")))
-        assert(daily.query.contains(URLQueryItem(name: "fid_period_div_code", value: "D")))
-        let overseas = KoreaInvestmentEndpoint.fetchOverseasDailyPrice(token: "t", EXCD: "NAS", SYMB: "AAPL")
-        assert(overseas.path == "/uapi/overseas-price/v1/quotations/dailyprice")
-        assert(overseas.transactionID == "HHDFS76240000")
-        assert(overseas.query.contains(URLQueryItem(name: "GUBN", value: "0")))
-        let index = KoreaInvestmentEndpoint.fetchOverseasIndexDailyPrice(
-            token: "t",
-            symbol: "SPX",
-            startDate: "20260101",
-            endDate: "20260401"
-        )
-        assert(index.path == "/uapi/overseas-price/v1/quotations/inquire-daily-chartprice")
-        assert(index.transactionID == "FHKST03030100")
-        assert(index.query.contains(URLQueryItem(name: "FID_INPUT_ISCD", value: "SPX")))
-        assert(index.query.contains(URLQueryItem(name: "FID_COND_MRKT_DIV_CODE", value: "N")))
-    }()
+}
+
+enum DomesticOrderSide {
+    case buy
+    case sell
+
+    var transactionID: String {
+        switch self {
+        case .buy: APIConfigManager.isDemo ? "VTTC0802U" : "TTTC0802U"
+        case .sell: APIConfigManager.isDemo ? "VTTC0801U" : "TTTC0801U"
+        }
+    }
 }
 
 private struct IssueTokenBody: Encodable {
