@@ -52,7 +52,8 @@ struct AccountTab: View {
                 }
             }
             .navigationTitle("계좌")
-            .toolbar { refreshButton }
+            .toolbar { RefreshToolbarButton(isLoading: store.isLoading) { await store.reload() } }
+            .dashboardScreen()
         }
         .task { await store.reload() }
     }
@@ -61,29 +62,35 @@ struct AccountTab: View {
         List {
             if let summary = store.summary {
                 Section("요약") {
-                    LabeledContent("전일 총자산", value: DisplayNumber.won(summary.totalAmount))
+                    LabeledContent("전일 총자산") {
+                        Text(DisplayNumber.won(summary.totalAmount))
+                            .font(Theme.heroFont)
+                            .foregroundStyle(Theme.foreground)
+                    }
                     signedRow("자산 증감", raw: summary.totalGainLoss, suffix: "원")
                     signedRow("증감률", raw: summary.totalGainLossRate, suffix: "%")
-                    LabeledContent("예수금", value: DisplayNumber.won(summary.orderableCash))
+                    LabeledContent("예수금") {
+                        Text(DisplayNumber.won(summary.orderableCash))
+                            .font(Theme.metricFont)
+                            .foregroundStyle(Theme.accent)
+                    }
                 }
+                .listRowBackground(Theme.card)
             }
             Section("보유 종목") {
                 if store.holdings.isEmpty {
                     Text("보유 종목이 없습니다.")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Theme.muted)
                 } else {
                     ForEach(store.holdings, id: \.rowID) { stock in
                         HoldingRow(stock: stock)
                     }
                 }
             }
-            if let errorMessage = store.errorMessage {
-                Section {
-                    Text(errorMessage)
-                        .foregroundStyle(.red)
-                }
-            }
+            .listRowBackground(Theme.card)
+            ErrorSection(message: store.errorMessage)
         }
+        .dashboardList()
         .refreshable { await store.reload() }
     }
 
@@ -91,17 +98,9 @@ struct AccountTab: View {
         let number = DisplayNumber.value(raw)
         return LabeledContent(title) {
             Text(DisplayNumber.signed(raw, suffix: suffix))
+                .font(Theme.metricFont)
                 .foregroundStyle(QuoteTone.color(number))
                 .monospacedDigit()
-        }
-    }
-
-    private var refreshButton: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Button("새로고침", systemImage: "arrow.clockwise") {
-                Task { await store.reload() }
-            }
-            .disabled(store.isLoading)
         }
     }
 }
@@ -113,29 +112,33 @@ private struct HoldingRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Text(stock.name)
-                    .font(.headline)
+                    .font(Theme.headlineFont)
+                    .foregroundStyle(Theme.foreground)
                 Spacer()
                 Text(DisplayNumber.won(stock.totalCurrentPrice))
+                    .font(Theme.metricFont)
+                    .foregroundStyle(Theme.foreground)
                     .monospacedDigit()
             }
             HStack {
                 Text(stock.code ?? "")
-                    .foregroundStyle(.secondary)
+                    .font(Theme.captionMetricFont)
+                    .foregroundStyle(Theme.muted)
                 Spacer()
                 Text(DisplayNumber.signed(stock.gainLoss, suffix: "원"))
                     .foregroundStyle(QuoteTone.color(DisplayNumber.value(stock.gainLoss)))
                 Text(DisplayNumber.signed(stock.gainLossRate, suffix: "%"))
                     .foregroundStyle(QuoteTone.color(DisplayNumber.value(stock.gainLossRate)))
             }
-            .font(.subheadline)
+            .font(Theme.captionMetricFont)
             .monospacedDigit()
             HStack {
                 Text("\(DisplayNumber.quantity(stock.quantity))주")
                 Text("현재가 \(DisplayNumber.won(stock.currentPrice))")
                 Text("평단 \(DisplayNumber.won(stock.avgBuyingPrice))")
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            .font(Theme.captionMetricFont)
+            .foregroundStyle(Theme.muted)
             .monospacedDigit()
         }
         .padding(.vertical, 4)

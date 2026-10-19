@@ -1,49 +1,9 @@
 import SwiftUI
 
-struct MetricRow: View {
-    let title: String
-    let value: String
-    var tone: Double?
-
-    var body: some View {
-        LabeledContent(title) {
-            Text(value)
-                .foregroundStyle(QuoteTone.color(tone))
-                .monospacedDigit()
-        }
-    }
-}
-
-struct MomentumSection: View {
-    let snapshot: MarketSnapshot
-
-    var body: some View {
-        if snapshot.macdHistogramAsPercentOfClose != nil || snapshot.ma20Slope5dPct != nil {
-            Section("탄력") {
-                if let histogram = snapshot.macdHistogramAsPercentOfClose {
-                    MetricRow(title: "MACD 히스토그램", value: DisplayNumber.percent(histogram), tone: histogram)
-                }
-                if let change = snapshot.macdHistogramChangeOver5dPct {
-                    MetricRow(title: "MACD 히스토그램 5거래일 변화", value: DisplayNumber.percent(change) + "p", tone: change)
-                }
-                if let slope = snapshot.ma20Slope5dPct {
-                    MetricRow(title: "20거래일 이동평균의 5거래일 변화", value: DisplayNumber.percent(slope), tone: slope)
-                }
-                if let days = snapshot.tradingDaysSinceCloseCrossedMa60 {
-                    LabeledContent(
-                        "60거래일 이동평균 \(snapshot.priceVsMa60Pct >= 0 ? "위" : "아래")에서",
-                        value: "\(days)거래일째"
-                    )
-                }
-            }
-        }
-    }
-}
-
 enum QuoteTone {
     static func color(_ value: Double?) -> Color {
-        guard let value, value != 0 else { return .primary }
-        return value > 0 ? .red : .blue
+        guard let value, value != 0 else { return Theme.foreground }
+        return value > 0 ? Theme.positive : Theme.negative
     }
 }
 
@@ -73,6 +33,11 @@ enum DisplayNumber {
         let body = plain(abs(value), digits: 2) ?? String(format: "%.2f", abs(value))
         let sign = value > 0 ? "+" : (value < 0 ? "-" : "")
         return sign + body + "%"
+    }
+
+    /// 0...1 비중을 부호 없는 퍼센트로. 0.25 → "25.0%"
+    static func fraction(_ value: Double) -> String {
+        decimal(value * 100, digits: 1) + "%"
     }
 
     static func decimal(_ value: Double, digits: Int) -> String {

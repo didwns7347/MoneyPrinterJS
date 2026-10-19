@@ -57,6 +57,16 @@ struct HistoryTab: View {
                 }
             }
             .navigationTitle("기록")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    NavigationLink {
+                        BacktestView()
+                    } label: {
+                        Label("백테스트", systemImage: "clock.arrow.2.circlepath")
+                    }
+                }
+            }
+            .dashboardScreen()
         }
         .onAppear { screen.load() }
     }
@@ -67,13 +77,25 @@ struct HistoryTab: View {
                 CashWeightChart(records: Array(records.reversed()))
                     .frame(height: 200)
             }
+            .listRowBackground(Theme.card)
             Section("요약") {
-                LabeledContent("판단 수", value: "\(records.count)일")
-                LabeledContent("평균 현금", value: percent(records.map(\.fraction).reduce(0, +) / Double(records.count)))
+                LabeledContent("판단 수") {
+                    Text("\(records.count)일")
+                        .font(Theme.metricFont)
+                }
+                LabeledContent("평균 현금") {
+                    Text(DisplayNumber.fraction(records.map(\.fraction).reduce(0, +) / Double(records.count)))
+                        .font(Theme.metricFont)
+                        .foregroundStyle(Theme.accent)
+                }
                 if let first = records.last, let last = records.first {
-                    LabeledContent("기간", value: "\(first.day) ~ \(last.day)")
+                    LabeledContent("기간") {
+                        Text("\(first.day) ~ \(last.day)")
+                            .font(Theme.captionMetricFont)
+                    }
                 }
             }
+            .listRowBackground(Theme.card)
             Section("날짜별 판단") {
                 ForEach(records) { record in
                     NavigationLink {
@@ -83,12 +105,10 @@ struct HistoryTab: View {
                     }
                 }
             }
+            .listRowBackground(Theme.card)
         }
+        .dashboardList()
         .refreshable { screen.load() }
-    }
-
-    private func percent(_ fraction: Double) -> String {
-        DisplayNumber.decimal(fraction * 100, digits: 1) + "%"
     }
 }
 
@@ -97,14 +117,27 @@ private struct CashWeightChart: View {
 
     var body: some View {
         Chart(records) { record in
+            AreaMark(
+                x: .value("날짜", record.day),
+                y: .value("현금", record.fraction * 100)
+            )
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [Theme.accent.opacity(0.25), Theme.accent.opacity(0.0)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
             LineMark(
                 x: .value("날짜", record.day),
                 y: .value("현금", record.fraction * 100)
             )
+            .foregroundStyle(Theme.accent)
             PointMark(
                 x: .value("날짜", record.day),
                 y: .value("현금", record.fraction * 100)
             )
+            .foregroundStyle(Theme.accent)
         }
         .chartYScale(domain: 0 ... 100)
         .chartYAxis {
@@ -113,6 +146,7 @@ private struct CashWeightChart: View {
                 AxisValueLabel {
                     if let number = value.as(Int.self) {
                         Text("\(number)%")
+                            .font(Theme.captionMetricFont)
                     }
                 }
             }
@@ -128,9 +162,12 @@ private struct HistoryRow: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(record.day)
-                    .font(.headline)
+                    .font(Theme.headlineFont)
+                    .foregroundStyle(Theme.foreground)
                 Spacer()
-                Text("현금 \(DisplayNumber.decimal(record.fraction * 100, digits: 1))%")
+                Text("현금 \(DisplayNumber.fraction(record.fraction))")
+                    .font(Theme.metricFont)
+                    .foregroundStyle(Theme.accent)
                     .monospacedDigit()
             }
             HStack {
@@ -142,8 +179,8 @@ private struct HistoryRow: View {
                         .foregroundStyle(QuoteTone.color(histogram))
                 }
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            .font(Theme.captionMetricFont)
+            .foregroundStyle(Theme.muted)
             .monospacedDigit()
         }
     }

@@ -28,24 +28,39 @@ enum CashWeightMarket: String, CaseIterable, Identifiable {
 
         Use only the supplied MarketSnapshot derived from daily prices. Do not use external data, fundamentals, news, or macroeconomic assumptions.
 
-        The portfolio is reviewed daily and has a long-term investment horizon. The objective is to participate in sustained market advances while reducing exposure during persistent downtrends and elevated market risk.
+        The portfolio is reviewed daily and has a long-term investment horizon. The objective is to participate in sustained market advances while reducing exposure during persistent downtrends and elevated market risk. Do not try to catch the exact bottom or the exact top.
 
-        Raise the ETF allocation once a recovery after a decline is confirmed, and lower it once upward momentum near a high is confirmed to be fading. Do not try to catch the exact bottom or the exact top.
+        All percent fields are in percent units, so 5.0 means 5%.
 
-        Evaluate the supplied indicators jointly:
-        - Price relative to the 20-, 60-, and 200-trading-day moving averages
-        - Direction of the 200-trading-day moving average over the prior 20 trading days
-        - Returns over the prior 21, 63, and 126 trading days
-        - Annualized volatility of daily returns over 20 and 60 trading days
-        - Change from the highest high of the last 200 trading days
-        - Histogram of the 12-trading-day exponential moving average minus the 26-trading-day exponential moving average, minus its 9-trading-day signal, as a percent of the closing price. Positive means the shorter upward pace is still above that signal.
-        - Change of that histogram over the prior 5 trading days. Positive means momentum is strengthening, negative means it is fading.
-        - Percent change of the 20-trading-day moving average over the prior 5 trading days
-        - Trading days since the close last crossed the 60-trading-day moving average. Whether the close is now above or below that average is given by the price relative to the 60-trading-day moving average. If no cross occurred in the available history, the value is the number of trading days checked.
+        Assess three areas separately, then combine them.
+
+        1. Long-term trend. This area has the highest priority.
+        - Core signals: price relative to the 200-trading-day moving average, and the percent change of that average over the prior 20 trading days.
+        - Close above a rising 200-day average is a long-term uptrend. Close below a falling 200-day average is a long-term downtrend. Anything else is an unclear trend.
+        - Price relative to the 60- and 20-trading-day moving averages is supporting evidence only.
+
+        2. Momentum. Is the move strengthening or weakening?
+        - Returns over the prior 21, 63, and 126 trading days. Note when shorter and longer returns disagree.
+        - The 12/26/9 MACD histogram as a percent of the close, and its change over the prior 5 trading days. A positive change means momentum is strengthening, a negative change means it is fading.
+        - Percent change of the 20-trading-day moving average over the prior 5 trading days.
+        - Trading days since the close last crossed the 60-trading-day moving average. This count has no direction by itself; read it together with the sign of the price relative to the 60-day average. If no cross occurred in the available history, the value is the number of trading days checked.
+
+        3. Risk. Should stock exposure be reduced?
+        - Annualized volatility over 20 and 60 trading days. A 20-day value well above the 60-day value means risk is rising quickly.
+        - Change from the highest high of the last 200 trading days. This shows the size of the decline, not its future direction.
+        - Return over the prior 1 trading day, to spot a one-day shock.
+        - Do not cut exposure on a single risk signal. Lower exposure when risk is confirmed by several indicators at once.
+
+        Combine the areas with these rules:
+        - Strong long-term uptrend, positive momentum, and low risk allows the lowest cash allocation.
+        - In a long-term uptrend with fading short-term momentum, hold back from raising the ETF allocation.
+        - A long-term downtrend with negative momentum calls for a higher cash allocation.
+        - A volatility spike together with a large drawdown caps the ETF allocation.
+        - When areas conflict, choose a middle allocation, not an extreme.
 
         Do not treat a high absolute price as evidence of overvaluation. Do not treat a recent decline alone as evidence that the market is cheap or that a rebound is imminent. Avoid counting correlated indicators as independent evidence.
 
-        Select the cash allocation that best matches the overall technical market state, using the five defined criteria.
+        Select the criterion whose market state best matches the combined assessment.
         """
     }
 
@@ -74,11 +89,11 @@ struct CashWeight {
     static let sampleCount = 3
 
     static let criteria = [
-        "0% cash. Maximum allocation to the ETF.",
-        "25% cash. High allocation to the ETF.",
-        "50% cash. Balanced allocation between the ETF and cash.",
-        "75% cash. Defensive allocation with a high cash reserve.",
-        "100% cash. Maximum allocation to cash.",
+        "0% cash. Strong long-term uptrend, positive and strengthening momentum, low risk.",
+        "25% cash. Uptrend dominates. Momentum is positive or only mildly fading, and risk is moderate at most.",
+        "50% cash. Mixed or uncertain. Trend, momentum, and risk point in different directions.",
+        "75% cash. Downtrend dominates, or risk is rising across several indicators.",
+        "100% cash. Strong long-term downtrend, negative momentum, very high risk.",
     ]
 
     let fraction: Double
@@ -100,22 +115,11 @@ struct CashWeight {
         var requestJSON = ""
         var responseJSONs: [String] = []
         for _ in 0 ..< sampleCount {
-            let (response, request, responseJSON) = try await client.systemOneRaw(
-                state: snapshot,
-                questions: [
-                    questionID: .score(question, criteria: criteria),
-                ]
-            )
-            guard let answer = response.answers[questionID],
-                  let score = answer.score,
-                  let confidence = answer.confidence
-            else {
-                throw CashWeightError.missingScore
-            }
-            samples.append(CashWeightSample(score: score, confidence: confidence, inputTokens: response.usage.inputTokens))
-            model = response.model
-            requestJSON = request
-            responseJSONs.append(responseJSON)
+            let result = try await sample(state: snapshot, client: client, question: question)
+            samples.append(result.sample)
+            model = result.model
+            requestJSON = result.requestJSON
+            responseJSONs.append(result.responseJSON)
         }
         let count = Double(samples.count)
         let weight = resolve(
@@ -140,6 +144,28 @@ struct CashWeight {
             )
         )
         return weight
+    }
+
+    /// Jev에 한 번 묻습니다. 저장하지 않습니다.
+    static func sample<State: Encodable>(
+        state: State,
+        client: JevClient,
+        question: String
+    ) async throws -> (sample: CashWeightSample, model: String, requestJSON: String, responseJSON: String) {
+        let (response, request, responseJSON) = try await client.systemOneRaw(
+            state: state,
+            questions: [
+                questionID: .score(question, criteria: criteria),
+            ]
+        )
+        guard let answer = response.answers[questionID],
+              let score = answer.score,
+              let confidence = answer.confidence
+        else {
+            throw CashWeightError.missingScore
+        }
+        let sample = CashWeightSample(score: score, confidence: confidence, inputTokens: response.usage.inputTokens)
+        return (sample, response.model, request, responseJSON)
     }
 
     static func resolve(score: Double, confidence: Double) -> CashWeight {

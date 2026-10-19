@@ -6,11 +6,11 @@ struct MarketSnapshot: Codable {
     static let slopeLag = 20
     static let requiredBarCount = lookback + slopeLag
 
-    let ticker: String
+    private(set) var ticker: String
     /// 마지막 일봉의 거래일. `yyyy-MM-dd`
-    let asOf: String
+    private(set) var asOf: String
     /// 마지막 일봉의 종가. 이 값을 저장하기 전의 기록에는 없습니다.
-    let latestClosingPrice: Double?
+    private(set) var latestClosingPrice: Double?
     /// 최근 200거래일 첫 종가를 100으로 둔 현재 지수.
     let priceIndexed: Double
     /// 현재 종가가 20거래일 이동평균보다 높은 정도. 단위는 퍼센트 포인트입니다.
@@ -24,6 +24,8 @@ struct MarketSnapshot: Codable {
     let volatility60dPct: Double
     /// 최근 200거래일 최고가 대비 현재 종가. 0 이하면 그 최고가 아래입니다.
     let drawdownFrom200dHighPct: Double
+    /// 직전 거래일 종가 대비 현재 종가 등락률. 단위는 퍼센트 포인트입니다. 이 값을 저장하기 전의 기록에는 없습니다.
+    let return1dPct: Double?
     /// 21, 63, 126거래일 전 종가 대비 현재 종가. 단위는 퍼센트 포인트입니다.
     let return1mPct: Double
     let return3mPct: Double
@@ -49,6 +51,7 @@ struct MarketSnapshot: Codable {
         case volatility20dPct = "annualized_percent_volatility_of_daily_returns_over_20_trading_days"
         case volatility60dPct = "annualized_percent_volatility_of_daily_returns_over_60_trading_days"
         case drawdownFrom200dHighPct = "percent_change_from_highest_high_of_last_200_trading_days"
+        case return1dPct = "percent_return_over_prior_1_trading_day"
         case return1mPct = "percent_return_over_prior_21_trading_days"
         case return3mPct = "percent_return_over_prior_63_trading_days"
         case return6mPct = "percent_return_over_prior_126_trading_days"
@@ -88,6 +91,7 @@ struct MarketSnapshot: Codable {
         self.volatility20dPct = Self.annualizedVolatilityPercent(closes, period: 20)
         self.volatility60dPct = Self.annualizedVolatilityPercent(closes, period: 60)
         self.drawdownFrom200dHighPct = Self.gapPercent(price: price, average: recentHighs.max() ?? price)
+        self.return1dPct = Self.gapPercent(price: price, average: closes[closes.count - 2])
         self.return1mPct = Self.gapPercent(price: price, average: closes[closes.count - 1 - 21])
         self.return3mPct = Self.gapPercent(price: price, average: closes[closes.count - 1 - 63])
         self.return6mPct = Self.gapPercent(price: price, average: closes[closes.count - 1 - 126])
@@ -101,6 +105,15 @@ struct MarketSnapshot: Codable {
             average: Self.mean(Array(closes.dropLast(5)), period: 20)
         )
         self.tradingDaysSinceCloseCrossedMa60 = Self.tradingDaysSinceCloseCrossedAverage(closes, period: 60)
+    }
+
+    /// 날짜, 종목, 절대 가격을 지운 사본. 백테스트에서 모델이 그 뒤 시장 흐름을 떠올리지 못하게 합니다.
+    func masked() -> MarketSnapshot {
+        var copy = self
+        copy.ticker = ""
+        copy.asOf = ""
+        copy.latestClosingPrice = nil
+        return copy
     }
 
     private static func mean(_ values: [Double], period: Int) -> Double {
@@ -160,7 +173,7 @@ struct MarketSnapshot: Codable {
         return averages
     }
 
-    private static func isoDate(_ yyyymmdd: String) -> String {
+    static func isoDate(_ yyyymmdd: String) -> String {
         guard yyyymmdd.count == 8 else { return yyyymmdd }
         let year = yyyymmdd.prefix(4)
         let month = yyyymmdd.dropFirst(4).prefix(2)
@@ -208,14 +221,19 @@ extension KoreaInvestmentAPIService {
     }
 
     private func makeDomesticETFSnapshot(stockCode: String, closedOnly: Bool) async throws -> MarketSnapshot {
-        var bars = try await fetchDomesticDailyBars(
-            stockCode: stockCode,
-            tradingDays: MarketSnapshot.requiredBarCount + 1
-        )
-        if closedOnly, let open = Self.openSessionDay(), bars.last?.date == open {
+        let bars = closedOnly
+            ? try await fetchClosedDomesticBars(stockCode: stockCode, tradingDays: MarketSnapshot.requiredBarCount)
+            : try await fetchDomesticDailyBars(stockCode: stockCode, tradingDays: MarketSnapshot.requiredBarCount)
+        return try MarketSnapshot(bars: bars, ticker: stockCode)
+    }
+
+    /// 아직 장이 끝나지 않은 오늘 일봉을 빼고, 종가가 확정된 일봉만 `tradingDays`개 돌려줍니다.
+    func fetchClosedDomesticBars(stockCode: String, tradingDays: Int) async throws -> [IndexDailyBar] {
+        var bars = try await fetchDomesticDailyBars(stockCode: stockCode, tradingDays: tradingDays + 1)
+        if let open = Self.openSessionDay(), bars.last?.date == open {
             bars.removeLast()
         }
-        return try MarketSnapshot(bars: bars, ticker: stockCode)
+        return Array(bars.suffix(tradingDays))
     }
 
     /// 오늘 일봉이 아직 확정되지 않았으면 오늘 날짜(`yyyyMMdd`)를 돌려줍니다.

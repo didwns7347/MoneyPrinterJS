@@ -6,3 +6,5 @@ build/
 *.xcconfig
 !MoneyPrinter.xcconfig
 !Config.example.xcconfig
+
+.cursor/

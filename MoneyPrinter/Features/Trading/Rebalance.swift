@@ -1,7 +1,7 @@
 import Foundation
 
 struct RebalanceOrder: Equatable {
-    enum Action: Equatable {
+    enum Action: Equatable, Codable {
         case buy(Int)
         case sell(Int)
         case hold(String)

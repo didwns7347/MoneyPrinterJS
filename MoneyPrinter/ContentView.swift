@@ -20,6 +20,8 @@ struct ContentView: View {
                     Label("기록", systemImage: "clock.arrow.circlepath")
                 }
         }
+        .tint(Theme.accent)
+        .preferredColorScheme(.dark)
     }
 }
 

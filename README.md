@@ -36,7 +36,7 @@ Jev는 현금 0·25·50·75·100% 다섯 기준에 확률을 매겨 답하고, �
 - **20거래일 이동평균의 5거래일 변화.** 단기 추세가 막 고개를 드는지, 숙이는지 봅니다. 200거래일 평균의 기울기보다 훨씬 빨리 바뀝니다.
 - **종가가 60거래일 이동평균을 마지막으로 넘거나 깬 뒤 지난 거래일 수.** 중기 추세가 바뀐 지 얼마나 됐는지 봅니다. 위인지 아래인지는 60거래일 평균 대비 괴리의 부호로 압니다. 며칠 안 됐으면 막 바뀐 것이고, 오래됐으면 추세가 자리 잡은 것입니다.
 
-질문에는 "하락 뒤 회복이 확인되면 비중을 늘리고, 고점 근처에서 상승 힘이 꺾인 게 확인되면 줄인다. 정확한 바닥이나 꼭대기는 노리지 않는다"는 목표를 적어 두었습니다.
+질문에는 장기 추세·모멘텀·위험 세 영역으로 나눠 보고 합치는 규칙을 적어 두었습니다. 정확한 바닥이나 꼭대기는 노리지 않습니다. 자세한 내용은 [Jev](#jev) 절에 있습니다.
 
 계산식과 JSON 키는 [지표](#지표) 절에 있습니다.
 
@@ -154,13 +154,21 @@ enum CodingKeys: String, CodingKey {
 
 `POST https://api.typesafe.ai/v1/systemone`에 Score 질문 하나를 보냅니다. 질문 ID는 `cash_weight`이고, 모델은 `jev-latest`입니다.
 
-기준은 현금 비중 다섯 칸입니다. 지표로 칸을 고르는 규칙은 적지 않고, Jev가 스냅샷을 보고 확률을 나눕니다. 두 종목의 질문 본문은 같고, 첫 문장의 ETF 이름만 다릅니다.
+질문은 지표를 세 영역으로 나눠 보게 합니다. 두 종목의 질문 본문은 같고, 첫 문장의 ETF 이름만 다릅니다.
 
-- `0% cash. Maximum allocation to the ETF.`
-- `25% cash. High allocation to the ETF.`
-- `50% cash. Balanced allocation between the ETF and cash.`
-- `75% cash. Defensive allocation with a high cash reserve.`
-- `100% cash. Maximum allocation to cash.`
+- **장기 추세(가장 우선).** 200거래일 평균 대비 위치와 그 평균의 기울기가 핵심이고, 20·60거래일 평균은 보조입니다.
+- **모멘텀.** 1·3·6개월 수익률, MACD 히스토그램과 5거래일 변화, 20거래일 평균의 기울기, 60거래일 평균 교차 뒤 경과일입니다. 경과일은 60거래일 평균 대비 괴리의 부호와 함께 읽습니다.
+- **위험.** 20·60거래일 변동성(20일 값이 60일 값보다 크게 높은지), 200거래일 고점 대비 낙폭, 하루 수익률입니다. 위험 신호 하나만으로는 비중을 줄이지 않고, 여러 지표에서 함께 보일 때 줄입니다.
+
+세 영역을 합치는 규칙도 적어 둡니다. 장기 상승 중이라도 단기 모멘텀이 약해지면 비중 확대를 보류하고, 변동성 급등과 큰 낙폭이 같이 오면 ETF 비중을 제한하고, 영역끼리 충돌하면 극단 대신 중간 칸을 고릅니다.
+
+기준은 현금 비중 다섯 칸이고, 칸마다 해당하는 시장 상태를 적었습니다.
+
+- `0% cash. Strong long-term uptrend, positive and strengthening momentum, low risk.`
+- `25% cash. Uptrend dominates. Momentum is positive or only mildly fading, and risk is moderate at most.`
+- `50% cash. Mixed or uncertain. Trend, momentum, and risk point in different directions.`
+- `75% cash. Downtrend dominates, or risk is rising across several indicators.`
+- `100% cash. Strong long-term downtrend, negative momentum, very high risk.`
 
 `score`는 0부터 4까지 칸 번호의 확률 가중 평균이라 소수가 될 수 있습니다. 같은 입력에도 답이 조금씩 달라서, 3번 물은 `score`의 평균을 씁니다. 현금 비중은 그 평균을 4로 나눈 뒤 0과 1 사이로 자릅니다. 응답의 `model`과 세 번의 입력 토큰 합계도 함께 저장합니다.
 
@@ -185,7 +193,13 @@ MoneyPrinter/
 │   │   ├── Jev/                 # systemone 클라이언트와 Score 모델
 │   │   ├── KoreaInvestment/     # 시세, 잔고, 토큰, 설정
 │   │   └── Trading/             # MarketSnapshot, 현금 비중, 기록
-│   └── UI/                      # 계좌, 오늘, 비중 탭
+│   └── UI/
+│       ├── Common/              # Theme, DisplayNumber, MetricRow 등 공통 UI
+│       ├── Account/             # 계좌 탭
+│       ├── Snapshot/            # 오늘 탭
+│       ├── CashWeight/          # 비중 탭과 판단 상세 화면
+│       ├── History/             # 기록 탭
+│       └── Backtest/            # 최근 100거래일 백테스트 (기록 탭 우측 상단)
 ├── MoneyPrinterTests/           # 리밸런싱 계산, API 엔드포인트 테스트 (Cmd+U)
 ├── Info.plist                   # $(APP_KEY) 등 빌드 설정 참조
 ├── MoneyPrinter.xcconfig

@@ -53,6 +53,7 @@ struct MarketSnapshotTests {
         #expect(isClose(snapshot.volatility20dPct, 0))
         #expect(isClose(snapshot.volatility60dPct, 0))
         #expect(isClose(snapshot.drawdownFrom200dHighPct, 0))
+        #expect(isClose(snapshot.return1dPct, 0))
         #expect(isClose(snapshot.return1mPct, 0))
         #expect(isClose(snapshot.return3mPct, 0))
         #expect(isClose(snapshot.return6mPct, 0))
@@ -88,6 +89,7 @@ struct MarketSnapshotTests {
         #expect(isClose(snapshot.ma20Slope5dPct, (ma20 / ma20Then - 1) * 100))
         #expect(isClose(snapshot.drawdownFrom200dHighPct, (last / 400.0 - 1) * 100))
 
+        #expect(isClose(snapshot.return1dPct, (last / (last - 1) - 1) * 100))
         #expect(isClose(snapshot.return1mPct, (last / (last - 21) - 1) * 100))
         #expect(isClose(snapshot.return3mPct, (last / (last - 63) - 1) * 100))
         #expect(isClose(snapshot.return6mPct, (last / (last - 126) - 1) * 100))
